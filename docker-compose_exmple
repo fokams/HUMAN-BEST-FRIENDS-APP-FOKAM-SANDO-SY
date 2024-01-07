@@ -1,0 +1,163 @@
+
+version: '3.8'
+ 
+services:
+
+  vote:
+
+    build:
+
+      context: ./vote
+
+    image: galandryous/vote-service:latest
+
+    volumes:
+
+      - ./vote:/usr/local/app
+
+    ports:
+
+      - "5002:80"
+
+    networks:
+
+      - front-tier
+
+      - back-tier
+
+    healthcheck:
+
+      test: ["CMD", "curl", "-f", "http://localhost"]
+
+      interval: 15s
+
+      timeout: 5s
+
+      retries: 3
+
+      start_period: 10s
+ 
+  worker:
+
+    build:
+
+      context: ./worker
+
+    image: galandryous/worker-service:latest
+
+    depends_on:
+
+      redis:
+
+        condition: service_healthy
+
+      db:
+
+        condition: service_healthy
+
+    networks:
+
+      - back-tier
+ 
+  result:
+
+    build:
+
+      context: ./result
+
+    image: galandryous/result-service:latest
+
+    entrypoint: nodemon --inspect=0.0.0.0 server.js
+
+    depends_on:
+
+      db:
+
+        condition: service_healthy
+
+    volumes:
+
+      - ./result:/usr/local/app
+
+    ports:
+
+      - "5001:80"
+
+      - "127.0.0.1:9229:9229"
+
+    networks:
+
+      - back-tier
+ 
+  db:
+
+    image: postgres:15-alpine
+
+    volumes:
+
+      - db-data:/var/lib/postgresql/data
+
+      - ./healthchecks:/healthchecks
+
+    networks:
+
+      - back-tier
+
+    healthcheck:
+
+      test: /healthchecks/postgres.sh
+
+      interval: 5s
+ 
+  redis:
+
+    image: redis:latest
+
+    volumes:
+
+      - ./healthchecks:/healthchecks
+
+    networks:
+
+      - back-tier
+
+    healthcheck:
+
+      test: /healthchecks/redis.sh
+
+      interval: 5s
+ 
+  seed-data:
+
+    build:
+
+      context: ./seed-data
+
+    image: galandryous/seed-data-service:latest
+
+    depends_on:
+
+      vote:
+
+        condition: service_healthy
+
+    networks:
+
+      - front-tier
+
+    restart: "no"
+ 
+networks:
+
+  front-tier:
+
+    driver: bridge
+
+  back-tier:
+
+    driver: bridge
+ 
+volumes:
+
+  db-data:
+
